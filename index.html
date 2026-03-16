@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VOID Instruments</title>
+<meta name="description" content="A suite of browser-based physical model synthesizers. No plugins. No installs. Pure Web Audio API.">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Barlow+Condensed:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg0:#07080a;--bg1:#0d0e12;--bg2:#13151a;--bg3:#1a1c24;--bg4:#22252f;
+  --border:#1c1f2a;--border2:#282c3c;--border3:#363c54;
+  --text:#b8bcc8;--text2:#606470;--text3:#363a48;
+  --mono:'DM Mono',monospace;
+  --serif:'Cormorant Garamond',serif;
+  --cond:'Barlow Condensed',sans-serif;
+}
+
+*{box-sizing:border-box;margin:0;padding:0;}
+
+html{scroll-behavior:smooth;}
+
+body{
+  background:var(--bg0);
+  color:var(--text);
+  font-family:var(--mono);
+  min-height:100vh;
+  overflow-x:hidden;
+}
+
+/* ── NOISE OVERLAY ── */
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events:none;z-index:0;opacity:.4;
+}
+
+/* ── HERO ── */
+#hero{
+  position:relative;
+  min-height:100vh;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:60px 24px 80px;
+  overflow:hidden;
+}
+
+/* Ambient background glow */
+#hero::after{
+  content:'';
+  position:absolute;
+  width:600px;height:600px;
+  border-radius:50%;
+  background:radial-gradient(ellipse,rgba(57,100,255,.06) 0%,transparent 70%);
+  top:50%;left:50%;
+  transform:translate(-50%,-60%);
+  pointer-events:none;
+}
+
+#hero-canvas{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  pointer-events:none;
+  opacity:.4;
+}
+
+.hero-content{
+  position:relative;z-index:2;
+  display:flex;flex-direction:column;
+  align-items:center;
+  gap:24px;
+  text-align:center;
+  max-width:680px;
+}
+
+#void-wordmark{
+  font-family:var(--cond);
+  font-size:clamp(64px,12vw,110px);
+  font-weight:600;
+  letter-spacing:16px;
+  line-height:1;
+  background:linear-gradient(135deg,#c0c8e0 0%,#e8eaf8 40%,#a0a8c0 100%);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+
+#void-sub{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:4px;
+  color:var(--text3);
+  text-transform:uppercase;
+}
+
+.hero-desc{
+  font-family:var(--serif);
+  font-size:18px;
+  font-style:italic;
+  font-weight:300;
+  color:var(--text2);
+  line-height:1.7;
+  max-width:480px;
+}
+
+.hero-stats{
+  display:flex;gap:32px;
+  padding:14px 28px;
+  background:var(--bg2);
+  border:1px solid var(--border2);
+  border-radius:8px;
+}
+.hero-stat{
+  display:flex;flex-direction:column;
+  align-items:center;gap:4px;
+}
+.hero-stat-num{
+  font-family:var(--cond);
+  font-size:28px;
+  font-weight:500;
+  color:var(--text);
+  line-height:1;
+}
+.hero-stat-label{
+  font-family:var(--mono);
+  font-size:8px;
+  letter-spacing:2px;
+  color:var(--text3);
+  text-transform:uppercase;
+}
+
+.scroll-hint{
+  position:absolute;bottom:32px;left:50%;transform:translateX(-50%);
+  font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--text3);
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  animation:bounce 2s ease-in-out infinite;
+}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0);}50%{transform:translateX(-50%) translateY(6px);}}
+.scroll-arrow{width:1px;height:24px;background:linear-gradient(to bottom,var(--text3),transparent);}
+
+/* ── INSTRUMENTS GRID ── */
+#instruments{
+  position:relative;z-index:1;
+  padding:0 24px 80px;
+  max-width:1100px;
+  margin:0 auto;
+}
+
+#grid-header{
+  display:flex;align-items:baseline;gap:12px;
+  margin-bottom:32px;
+  padding-bottom:12px;
+  border-bottom:1px solid var(--border);
+}
+#grid-title{
+  font-family:var(--cond);
+  font-size:13px;
+  font-weight:500;
+  letter-spacing:4px;
+  color:var(--text3);
+  text-transform:uppercase;
+}
+
+.instruments-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+  gap:12px;
+}
+
+/* ── INSTRUMENT CARD ── */
+.inst-card{
+  background:var(--bg1);
+  border:1px solid var(--border2);
+  border-radius:10px;
+  overflow:hidden;
+  cursor:pointer;
+  transition:all .2s;
+  position:relative;
+  display:flex;flex-direction:column;
+  text-decoration:none;
+}
+.inst-card:hover{
+  border-color:var(--border3);
+  transform:translateY(-2px);
+  box-shadow:0 12px 40px rgba(0,0,0,.5);
+}
+.inst-card:hover .card-glow{opacity:1;}
+.inst-card:active{transform:translateY(0);}
+
+.card-glow{
+  position:absolute;inset:0;border-radius:10px;
+  opacity:0;transition:opacity .2s;
+  pointer-events:none;
+}
+
+.card-top{
+  padding:18px 20px 14px;
+  display:flex;align-items:flex-start;gap:14px;
+  position:relative;
+  border-bottom:1px solid var(--border);
+}
+
+.card-icon{
+  width:44px;height:44px;
+  border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--serif);
+  font-size:22px;
+  font-style:italic;
+  font-weight:400;
+  flex-shrink:0;
+  border:1px solid;
+}
+
+.card-name-block{flex:1;}
+.card-name{
+  font-family:var(--cond);
+  font-size:20px;
+  font-weight:600;
+  letter-spacing:3px;
+  line-height:1;
+  margin-bottom:4px;
+}
+.card-full-name{
+  font-family:var(--serif);
+  font-size:12px;
+  font-style:italic;
+  font-weight:300;
+  color:var(--text2);
+}
+
+.card-type{
+  font-family:var(--mono);
+  font-size:8px;
+  letter-spacing:2px;
+  color:var(--text3);
+  text-transform:uppercase;
+  padding:2px 7px;
+  border:1px solid var(--border2);
+  border-radius:3px;
+  white-space:nowrap;
+  align-self:flex-start;
+}
+
+.card-body{
+  padding:14px 20px 16px;
+  flex:1;display:flex;flex-direction:column;gap:10px;
+}
+
+.card-desc{
+  font-family:var(--serif);
+  font-size:13px;
+  font-style:italic;
+  font-weight:300;
+  color:var(--text2);
+  line-height:1.6;
+}
+
+.card-tags{
+  display:flex;gap:5px;flex-wrap:wrap;
+}
+.card-tag{
+  font-family:var(--mono);
+  font-size:8px;
+  letter-spacing:1px;
+  color:var(--text3);
+  background:var(--bg3);
+  border:1px solid var(--border);
+  border-radius:3px;
+  padding:2px 6px;
+  text-transform:uppercase;
+}
+
+.card-cta{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 20px 14px;
+  border-top:1px solid var(--border);
+}
+.card-open{
+  font-family:var(--mono);
+  font-size:9px;
+  letter-spacing:2px;
+  text-transform:uppercase;
+  transition:color .15s;
+}
+.card-arrow{
+  font-size:14px;
+  transition:transform .2s;
+}
+.inst-card:hover .card-arrow{transform:translateX(4px);}
+
+/* ── TECH SECTION ── */
+#tech{
+  position:relative;z-index:1;
+  border-top:1px solid var(--border);
+  padding:60px 24px 80px;
+  max-width:1100px;
+  margin:0 auto;
+}
+
+#tech-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:8px;
+  margin-top:32px;
+}
+
+.tech-block{
+  background:var(--bg1);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:14px 16px;
+}
+.tech-block-title{
+  font-family:var(--mono);
+  font-size:9px;
+  letter-spacing:2px;
+  color:var(--text3);
+  text-transform:uppercase;
+  margin-bottom:6px;
+}
+.tech-block-body{
+  font-family:var(--serif);
+  font-size:13px;
+  font-style:italic;
+  color:var(--text2);
+  line-height:1.5;
+}
+
+/* ── FOOTER ── */
+#site-footer{
+  border-top:1px solid var(--border);
+  padding:20px 24px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  max-width:1100px;
+  margin:0 auto;
+  flex-wrap:wrap;
+  gap:10px;
+}
+.footer-left{
+  font-family:var(--mono);
+  font-size:9px;
+  letter-spacing:2px;
+  color:var(--text3);
+}
+.footer-right{
+  font-family:var(--serif);
+  font-size:12px;
+  font-style:italic;
+  color:var(--text3);
+}
+
+/* ── IFRAME MODAL ── */
+#modal-overlay{
+  position:fixed;inset:0;
+  background:rgba(0,0,0,.92);
+  z-index:1000;
+  display:none;
+  flex-direction:column;
+}
+#modal-overlay.open{display:flex;}
+#modal-bar{
+  height:44px;
+  background:var(--bg1);
+  border-bottom:1px solid var(--border2);
+  display:flex;align-items:center;
+  padding:0 16px;
+  gap:12px;
+  flex-shrink:0;
+}
+#modal-title{
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:3px;
+  text-transform:uppercase;
+  flex:1;
+}
+#modal-close{
+  font-family:var(--mono);
+  font-size:9px;
+  letter-spacing:2px;
+  color:var(--text2);
+  cursor:pointer;
+  padding:5px 12px;
+  border:1px solid var(--border2);
+  border-radius:4px;
+  transition:all .12s;
+  text-transform:uppercase;
+  background:var(--bg3);
+}
+#modal-close:hover{color:var(--text);border-color:var(--border3);}
+#modal-frame{
+  flex:1;
+  border:none;
+  width:100%;
+  background:var(--bg0);
+}
+
+/* ── SECTION HEADING ── */
+.section-heading{
+  font-family:var(--cond);
+  font-size:13px;
+  font-weight:500;
+  letter-spacing:4px;
+  color:var(--text3);
+  text-transform:uppercase;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-track{background:var(--bg0);}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<section id="hero">
+  <canvas id="hero-canvas"></canvas>
+  <div class="hero-content">
+    <div>
+      <div id="void-wordmark">VOID</div>
+      <div id="void-sub">Instruments</div>
+    </div>
+    <div class="hero-desc">
+      Ten browser-based synthesizers built from physical models and mathematical first principles.
+      No plugins. No installs. No subscriptions. Pure Web Audio API.
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="hero-stat-num">10</div>
+        <div class="hero-stat-label">Instruments</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-num">0</div>
+        <div class="hero-stat-label">Dependencies</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-num">∞</div>
+        <div class="hero-stat-label">π digits</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-num">$0</div>
+        <div class="hero-stat-label">Forever</div>
+      </div>
+    </div>
+  </div>
+  <div class="scroll-hint">
+    <span>SCROLL</span>
+    <div class="scroll-arrow"></div>
+  </div>
+</section>
+
+<!-- INSTRUMENTS -->
+<section id="instruments">
+  <div id="grid-header">
+    <div class="section-heading">The Instruments</div>
+  </div>
+  <div class="instruments-grid" id="instruments-grid">
+    <!-- Populated by JS -->
+  </div>
+</section>
+
+<!-- TECH -->
+<section id="tech">
+  <div class="section-heading">Under the Hood</div>
+  <div id="tech-grid">
+    <div class="tech-block">
+      <div class="tech-block-title">Physical Modeling</div>
+      <div class="tech-block-body">Reed-bore feedback, bow stick-slip, Karplus-Strong strings, edge-tone vortex shedding, stopped cylinder resonance.</div>
+    </div>
+    <div class="tech-block">
+      <div class="tech-block-title">Web Audio API</div>
+      <div class="tech-block-body">Every sound runs natively in the browser. No WASM, no server, no plugins — just oscillators, filters, and convolution.</div>
+    </div>
+    <div class="tech-block">
+      <div class="tech-block-title">Sample-Accurate Timing</div>
+      <div class="tech-block-body">Lookahead scheduler using AudioContext.currentTime. Timing doesn't drift no matter how long you play.</div>
+    </div>
+    <div class="tech-block">
+      <div class="tech-block-title">Zero Dependencies</div>
+      <div class="tech-block-body">No React, no Tone.js, no npm. Each instrument is a single self-contained HTML file you can open offline.</div>
+    </div>
+    <div class="tech-block">
+      <div class="tech-block-title">Formant Synthesis</div>
+      <div class="tech-block-body">VOCA's choir uses 5-band formant filter banks with inverse-distance vowel interpolation — real IPA vowel chart positions.</div>
+    </div>
+    <div class="tech-block">
+      <div class="tech-block-title">Mathematical Sequencing</div>
+      <div class="tech-block-body">IRRATIONAL uses π's digit stream as an infinite non-repeating score. The melody never resolves because π is irrational.</div>
+    </div>
+  </div>
+</section>
+
+<footer id="site-footer" style="margin-bottom:20px;">
+  <div class="footer-left">VOID INSTRUMENTS v1.0 · WEB AUDIO API · OPEN SOURCE</div>
+  <div class="footer-right">built with Claude — no plugins were harmed</div>
+</footer>
+
+<!-- MODAL -->
+<div id="modal-overlay">
+  <div id="modal-bar">
+    <div id="modal-title">—</div>
+    <button id="modal-close">✕ CLOSE</button>
+  </div>
+  <iframe id="modal-frame" allow="autoplay" title="Instrument"></iframe>
+</div>
+
+<script>
+// ── Instrument definitions ──
+const INSTRUMENTS = [
+  {
+    id:'minidaw',   file:'minidaw.html',
+    name:'VOID',    fullName:'Mini DAW',
+    icon:'V',       type:'DAW',
+    color:'#39ff8a', dimColor:'#083a18',
+    desc:'Full sequencer, mixer, FM synth, subtractive synth, and drum machine. The mothership.',
+    tags:['Sequencer','Mixer','FM','Sub','Drums','Step Seq'],
+  },
+  {
+    id:'triad',     file:'triad.html',
+    name:'TRIAD',   fullName:'3× Oscillator Synthesizer',
+    icon:'T',       type:'Subtractive',
+    color:'#ff6080', dimColor:'#3a0818',
+    desc:'Three oscillators with ring mod, LFO routing, arpeggiator, chord mode, and filter ADSR. The workhorse.',
+    tags:['3× Osc','Ring Mod','LFO','Arpeggiator','Chord Mode','Filter'],
+  },
+  {
+    id:'sampler',   file:'sampler.html',
+    name:'CHOP',    fullName:'Sample Chopper',
+    icon:'C',       type:'Sampler',
+    color:'#00d4ff', dimColor:'#003a48',
+    desc:'MPC-style 16-pad sampler with transient detection, waveform slicer, chop sequencer, and per-pad ADSR.',
+    tags:['16 Pads','Auto Chop','Sequencer','ADSR','Waveform'],
+  },
+  {
+    id:'irrational',file:'irrational.html',
+    name:'IRRATIONAL', fullName:'π Synthesizer',
+    icon:'π',       type:'Generative',
+    color:'#c060ff', dimColor:'#2a0848',
+    desc:'π\'s digit stream mapped to a chromatic scale. An infinite, non-repeating melody that never resolves.',
+    tags:['Generative','π Stream','Zeta Helix','Waterfall','Keyboard'],
+  },
+  {
+    id:'tenor-sax', file:'tenor-sax.html',
+    name:'TENR',    fullName:'Tenor Saxophone',
+    icon:'T',       type:'Physical Model',
+    color:'#e8a030', dimColor:'#3a2808',
+    desc:'Reed-bore feedback physical model. Stiffness, bite, growl, key click, vibrato, sul ponticello.',
+    tags:['Reed Model','Physical','Vibrato','Octave Wheel','Formant'],
+  },
+  {
+    id:'choir',     file:'choir.html',
+    name:'VOCA',    fullName:'SATB Choral Synthesizer',
+    icon:'V',       type:'Formant',
+    color:'#c8a8f0', dimColor:'#2a1848',
+    desc:'Soprano, Alto, Tenor, Bass. XY vowel morph pad with 5-band formant interpolation across A E I O U.',
+    tags:['SATB','Formant','XY Pad','Vowel Morph','Ensemble','Choir'],
+  },
+  {
+    id:'cello',     file:'cello.html',
+    name:'ARCO',    fullName:'Cello Physical Model',
+    icon:'A',       type:'Physical Model',
+    color:'#c8830a', dimColor:'#3a2008',
+    desc:'Bow stick-slip model with sul ponticello/tasto, string types, attack rosin scrape, and body resonance.',
+    tags:['Bow Model','String','Vibrato','Col Legno','Harmonics'],
+  },
+  {
+    id:'alto',      file:'alto.html',
+    name:'ALTO',    fullName:'Violin · Viola Duo',
+    icon:'A',       type:'Physical Model',
+    color:'#f07050', dimColor:'#3a1008',
+    desc:'Shared string engine driving violin and viola simultaneously. Onset offset for ensemble realism.',
+    tags:['Violin','Viola','Duo','Physical','Ensemble','Bow'],
+  },
+  {
+    id:'guitar',    file:'guitar.html',
+    name:'GRID',    fullName:'Electric Guitar',
+    icon:'G',       type:'Karplus-Strong',
+    color:'#ff8840', dimColor:'#3a1808',
+    desc:'Karplus-Strong string model with amp sim, 4 channels, cabinet IR, whammy, effects chain.',
+    tags:['K-S Model','Amp Sim','Cabinet','Effects','Pickup','Whammy'],
+  },
+  {
+    id:'panflute',  file:'panflute.html',
+    name:'SYRINX',  fullName:'Pan Flute Physical Model',
+    icon:'S',       type:'Physical Model',
+    color:'#d4aa60', dimColor:'#3a2808',
+    desc:'Edge-tone synthesis for stopped cylindrical tubes. 13-tube array, flutter tongue, overblowing.',
+    tags:['Edge-Tone','Pan Flute','Flutter','Overtone','Waveguide'],
+  },
+];
+
+// ── Build cards ──
+function buildCards(){
+  const grid = document.getElementById('instruments-grid');
+  INSTRUMENTS.forEach(inst => {
+    const card = document.createElement('a');
+    card.className = 'inst-card';
+    card.href = '#';
+    card.setAttribute('role','button');
+    card.setAttribute('aria-label', `Open ${inst.name}`);
+
+    card.innerHTML = `
+      <div class="card-glow" style="background:radial-gradient(ellipse at 30% 30%,${inst.color}0a,transparent 60%);"></div>
+      <div class="card-top">
+        <div class="card-icon" style="background:${inst.dimColor};border-color:${inst.color}44;color:${inst.color};">
+          ${inst.icon}
+        </div>
+        <div class="card-name-block">
+          <div class="card-name" style="color:${inst.color};">${inst.name}</div>
+          <div class="card-full-name">${inst.fullName}</div>
+        </div>
+        <div class="card-type">${inst.type}</div>
+      </div>
+      <div class="card-body">
+        <div class="card-desc">${inst.desc}</div>
+        <div class="card-tags">
+          ${inst.tags.map(t=>`<div class="card-tag">${t}</div>`).join('')}
+        </div>
+      </div>
+      <div class="card-cta">
+        <div class="card-open" style="color:${inst.color};">Open Instrument</div>
+        <div class="card-arrow" style="color:${inst.color};">→</div>
+      </div>
+    `;
+
+    card.addEventListener('click', e => {
+      e.preventDefault();
+      openInstrument(inst);
+    });
+
+    grid.appendChild(card);
+  });
+}
+
+// ── Modal ──
+function openInstrument(inst){
+  const overlay = document.getElementById('modal-overlay');
+  const frame   = document.getElementById('modal-frame');
+  const title   = document.getElementById('modal-title');
+  overlay.classList.add('open');
+  title.textContent = inst.name + ' — ' + inst.fullName;
+  frame.src = inst.file;
+  document.body.style.overflow = 'hidden';
+}
+
+document.getElementById('modal-close').addEventListener('click', () => {
+  const overlay = document.getElementById('modal-overlay');
+  const frame   = document.getElementById('modal-frame');
+  overlay.classList.remove('open');
+  frame.src = '';
+  document.body.style.overflow = '';
+});
+
+// Close on escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.getElementById('modal-close').click();
+});
+
+// ── Hero canvas — animated waveform particles ──
+function initHeroCanvas(){
+  const canvas = document.getElementById('hero-canvas');
+  const ctx    = canvas.getContext('2d');
+  let W, H, particles = [];
+
+  function resize(){
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = document.getElementById('hero').offsetHeight;
+  }
+
+  // Sparse floating sine-wave particles
+  function spawnParticles(){
+    particles = [];
+    const count = Math.floor(W / 60);
+    for(let i = 0; i < count; i++){
+      particles.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.2,
+        vy: (Math.random() - 0.5) * 0.1,
+        amp: 20 + Math.random() * 40,
+        freq: 0.005 + Math.random() * 0.015,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.005 + Math.random() * 0.01,
+        len: 60 + Math.random() * 120,
+        color: ['#c060ff','#4090e0','#39ff8a','#e8a030','#ff6080'][Math.floor(Math.random()*5)],
+        alpha: 0.06 + Math.random() * 0.1,
+      });
+    }
+  }
+
+  let t = 0;
+  function draw(){
+    ctx.clearRect(0, 0, W, H);
+    t += 0.3;
+
+    particles.forEach(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      if(p.x < -p.len) p.x = W + p.len;
+      if(p.x > W + p.len) p.x = -p.len;
+      if(p.y < 0) p.y = H;
+      if(p.y > H) p.y = 0;
+
+      // Draw a short sine snippet
+      ctx.beginPath();
+      const steps = 40;
+      for(let s = 0; s <= steps; s++){
+        const sx = p.x - p.len/2 + (s/steps)*p.len;
+        const sy = p.y + Math.sin(s/steps * Math.PI * 2 * p.freq * 100 + p.phase + t * p.speed) * p.amp * 0.3;
+        s === 0 ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy);
+      }
+      ctx.strokeStyle = p.color + Math.floor(p.alpha * 255).toString(16).padStart(2,'0');
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    });
+
+    requestAnimationFrame(draw);
+  }
+
+  resize();
+  spawnParticles();
+  draw();
+  window.addEventListener('resize', () => { resize(); spawnParticles(); });
+}
+
+// ── Init ──
+buildCards();
+initHeroCanvas();
+</script>
+</body>
+</html>
